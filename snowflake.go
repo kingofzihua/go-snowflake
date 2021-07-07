@@ -65,8 +65,9 @@ func NextID() (uint64, error) {
 		}
 	}
 
+	// 获取 当前日期和 开始时间的差值
 	df := int(elapsedTime(c, startTime))
-	if df < 0 || df > MaxTimestamp {
+	if df < 0 || df > MaxTimestamp {// 如果超过了最大时间 需要用户调整开始时间
 		return 0, errors.New("The maximum life cycle of the snowflake algorithm is 2^41-1(millis), please check starttime")
 	}
 
@@ -135,7 +136,7 @@ func (id *SID) GenerateTime() time.Time {
 
 // ParseID 解析雪花ID 为一个 SID 的结构体.
 func ParseID(id uint64) SID {
-	timestamp := id >> (timestampMoveLength)
+	timestamp := id >> timestampMoveLength
 	sequence := id & MaxSequence
 	machineID := (id & (MaxMachineID << SequenceLength)) >> SequenceLength
 

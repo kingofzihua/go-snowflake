@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/kingofzihua/go-snowflake"
 )
 
 func TestID(t *testing.T) {

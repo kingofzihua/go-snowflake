@@ -2,7 +2,7 @@ package snowflake_test
 
 import (
 	"fmt"
-	"github.com/godruoyi/go-snowflake"
+	"github.com/kingofzihua/go-snowflake"
 	"testing"
 	"time"
 )
