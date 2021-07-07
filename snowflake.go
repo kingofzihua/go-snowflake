@@ -6,13 +6,17 @@ import (
 )
 
 // 雪花ID部分的位长度
+// *41位时间戳 + 10位工作机器ID + 12位序列号*
+// 41位时间戳: 精确到毫秒级，41位的长度可以使用2^41=69年
+// 10位工作机器ID: 最多支持部署2^10=1024个节点(一般是5位IDC+5位machine编号)
+// 12位序列号: 支持每台服务器每毫秒产生 2^12=4096 个ID序号
 const (
-	TimestampLength = 41                     // 时间序列位   41位    精确到毫秒级，41位的长度可以使用2^41=69年
-	MachineIDLength = 10                     // 机器ID 标识位 10位  最多支持部署2^10=1024个节点
-	SequenceLength  = 12                     // 序列号 12位  即为一系列的自增ID可以支持同一节点同一毫秒生成多个ID序号，12位的序列号支持每台服务器每毫秒产生 2^12=4096 个ID序号
-	MaxSequence     = 1<<SequenceLength - 1  // 最大可用的序列号   4095
-	MaxTimestamp    = 1<<TimestampLength - 1 // 最大可用时间 		2199023255551
-	MaxMachineID    = 1<<MachineIDLength - 1 // 最大可用的机器ID 标识 1023
+	TimestampLength = 41                     // 时间序列位
+	MachineIDLength = 10                     // 机器ID
+	SequenceLength  = 12                     // 序列号
+	MaxSequence     = 1<<SequenceLength - 1  // 最大可用的序列号   2^12-1 =  4095
+	MaxTimestamp    = 1<<TimestampLength - 1 // 最大可用时间 		2^41-1 = 2199023255551
+	MaxMachineID    = 1<<MachineIDLength - 1 // 最大可用的机器ID 标识 2^10-1 =1023
 
 	machineIDMoveLength = SequenceLength                   // 机器 ID 移动长度
 	timestampMoveLength = MachineIDLength + SequenceLength // 时间序列移动长度
@@ -30,9 +34,9 @@ type SequenceResolver func(ms int64) (uint16, error)
 // default machineID is 0
 // default resolver is AtomicResolver
 var (
-	resolver  SequenceResolver
-	machineID = 0
-	startTime = time.Date(2008, 11, 10, 23, 0, 0, 0, time.UTC)
+	resolver  SequenceResolver //生成器
+	machineID = 0              //机器编号
+	startTime = time.Date(2008, 11, 10, 23, 0, 0, 0, time.UTC) //开始时间
 )
 
 // ID 生成雪花ID 会忽略错误 如果需要错误，要使用 NextID
@@ -45,15 +49,15 @@ func ID() uint64 {
 // NextID 使用 NextID 会生成雪花id 并返回错误
 // 此函数是线程安全的。
 func NextID() (uint64, error) {
-	c := currentMillis() //获取当前毫秒数
-	seqResolver := callSequenceResolver() // 获取
+	c := currentMillis()                  //获取当前毫秒数
+	seqResolver := callSequenceResolver() // 获取序列号解析器
 	seq, err := seqResolver(c)
 
 	if err != nil {
 		return 0, err
 	}
 
-	for seq >= MaxSequence { // 如果生成的编号大于最大编号，就自旋
+	for seq >= MaxSequence { // 如果生成的编号大于最大编号，就等待下一秒
 		c = waitForNextMillis(c)
 		seq, err = seqResolver(c)
 		if err != nil {
@@ -106,23 +110,23 @@ func SetMachineID(m uint16) {
 	machineID = int(m)
 }
 
-// SetSequenceResolver set an custom sequence resolver.
-// This function is thread-unsafe, recommended you call him in the main function.
+// SetSequenceResolver 设置自定义 序列解析器
+// 此函数是线程不安全的，建议您在主函数中调用他。
 func SetSequenceResolver(seq SequenceResolver) {
 	if seq != nil {
 		resolver = seq
 	}
 }
 
-// SID snowflake id
+// SID 雪花ID
 type SID struct {
-	Sequence  uint64  // 序列号
-	MachineID uint64  // 机器ID
-	Timestamp uint64  // 时间序列位
+	Sequence  uint64 // 序列号
+	MachineID uint64 // 机器ID
+	Timestamp uint64 // 时间序列位
 	ID        uint64
 }
 
-// GenerateTime snowflake generate at, return a UTC time.
+// GenerateTime 生成的时间, 返回一个 UTC time.
 func (id *SID) GenerateTime() time.Time {
 	ms := startTime.UTC().UnixNano()/1e6 + int64(id.Timestamp)
 
@@ -131,7 +135,7 @@ func (id *SID) GenerateTime() time.Time {
 
 // ParseID 解析雪花ID 为一个 SID 的结构体.
 func ParseID(id uint64) SID {
-	timestamp := id >> (SequenceLength + MachineIDLength)
+	timestamp := id >> (timestampMoveLength)
 	sequence := id & MaxSequence
 	machineID := (id & (MaxMachineID << SequenceLength)) >> SequenceLength
 
@@ -150,13 +154,13 @@ func ParseID(id uint64) SID {
 // 等待下一个毫秒
 func waitForNextMillis(last int64) int64 {
 	now := currentMillis()
-	for now == last {
+	for now == last { //自旋等待下一毫秒
 		now = currentMillis()
 	}
 	return now
 }
 
-// 获取 序列号解决器
+// 获取序列号解析器
 func callSequenceResolver() SequenceResolver {
 	if resolver == nil {
 		return AtomicResolver

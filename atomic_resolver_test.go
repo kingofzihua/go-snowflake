@@ -1,9 +1,10 @@
 package snowflake_test
 
 import (
-	"testing"
-
+	"fmt"
 	"github.com/godruoyi/go-snowflake"
+	"testing"
+	"time"
 )
 
 func TestAtomicResolver(t *testing.T) {
@@ -12,6 +13,24 @@ func TestAtomicResolver(t *testing.T) {
 	if id != 0 {
 		t.Error("Sequence should be equal 0")
 	}
+}
+
+func TestAtomicResolver2(t *testing.T) {
+	var ch = make(chan bool)
+
+	go func() {
+		<-time.After(time.Second)
+		ch <- true
+	}()
+
+	go func() {
+		for {
+			id, _ := snowflake.AtomicResolver(1)
+			fmt.Println(id)
+		}
+	}()
+
+	<- ch
 }
 
 func BenchmarkCombinationParallel(b *testing.B) {
