@@ -3,6 +3,7 @@ package snowflake_test
 import (
 	"fmt"
 	"github.com/kingofzihua/go-snowflake"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -30,7 +31,20 @@ func TestAtomicResolver2(t *testing.T) {
 		}
 	}()
 
-	<- ch
+	<-ch
+}
+func TestAtomicResolver3(t *testing.T) {
+	var id uint16
+	id, _ = snowflake.AtomicResolver(1)
+	fmt.Println(id)
+	id, _ = snowflake.AtomicResolver(1)
+	fmt.Println(id)
+	id, _ = snowflake.AtomicResolver(2)
+	fmt.Println(id)
+	id, _ = snowflake.AtomicResolver(2)
+	fmt.Println(id)
+	id, _ = snowflake.AtomicResolver(2)
+	fmt.Println(id)
 }
 
 func BenchmarkCombinationParallel(b *testing.B) {
@@ -45,4 +59,18 @@ func BenchmarkAtomicResolver(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = snowflake.AtomicResolver(1)
 	}
+}
+
+func TestCAS(t *testing.T) {
+
+	var lastTime int64 //最后生成时间
+
+	var last = atomic.LoadInt64(&lastTime)
+
+	for i := 0; i < 10; i++ {
+		res := atomic.CompareAndSwapInt64(&lastTime, last, 1)
+
+		fmt.Println(res)
+	}
+
 }
